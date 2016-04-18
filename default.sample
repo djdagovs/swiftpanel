@@ -1,0 +1,107 @@
+server {
+    listen 80 default_server;
+    root /home/nginx/httpdocs;
+    index index.php index.htm index.html;
+    server_name template.swiftmedia.ca www.template.swiftmedia.ca;
+    if (!-e $request_filename) { rewrite ^(.*)$ /index.php break; }
+    rewrite /wp-config.php /forbidden last;
+    rewrite /install.php /forbidden last;
+    rewrite ^/wp-includes/(.*).php /forbidden last;
+    rewrite ^/wp-admin/includes(.*)$ /forbidden last;
+    rewrite ^(.*)/uploads/(.*).php(.?) /forbidden last;
+    rewrite /xmlrpc.php /forbidden last;
+    location = /forbidden { deny all; }
+    location = /nginx.conf { deny all; }
+    location ~* \.(txt)$ { charset utf-8; }
+    gzip on;
+    gzip_proxied any;
+    gzip_min_length 100;
+    gzip_buffers 8 16k; # number size, default 32 4k|16 8k
+    gzip_types text/css text/plain text/javascript application/javascript application/json application/x-javascript application/xml application/xml+rss application/xhtml+xml application/x-font-ttf application/x-font-opentype application/vnd.ms-fontobject image/svg+xml image/x-icon application/rss+xml application/atom_xml;
+    gzip_vary on;
+    gzip_comp_level 9;
+    gzip_http_version 1.0;
+    gzip_disable "MSIE [1-6]\.(?!.*SV1)";
+    location ~* \.(png|jpg|jpeg|gif|ico|bmp|img|ttf|otf|eot|svg|woff)$ {
+        expires 90d;
+        add_header Pragma public;
+        add_header Cache-Control public;
+        try_files $uri @fallback;
+    }
+
+    location ~* \.(bz2|exe|gz|pdf|rar||tgz|zip)$ {
+        expires 2w;
+        add_header Pragma public;
+        add_header Cache-Control public;
+        try_files $uri @fallback;
+    }
+    
+    location ~* \.(ac3|avi|flv|iso|mp3|mp4|mpeg|mpg|ogg|qt|rm|swf|wav)$ {
+        expires 1w;
+        add_header Pragma public;
+        add_header Cache-Control public;
+        try_files $uri @fallback;
+    }
+
+    location ~* \.(js|css|htm|html|xhtml|xml|dat|doc|docx|dts|ppt|pptx|tar|txt|xls|xlsx)$ {
+        expires 1w;
+        add_header Pragma public;
+        add_header Cache-Control public;
+        try_files $uri @fallback;
+    }
+    
+    if (!-e $request_filename) {
+        rewrite /wp-admin$ $scheme://$host$uri/ permanent;
+        rewrite ^(/[^/]+)?(/wp-.*) $2 last;
+        rewrite ^(/[^/]+)?(/.*\.php) $2 last;
+    }
+
+    set $no_cache 0;
+
+    if ( $http_cookie ~* "comment_author_|wordpress_(?!test_cookie)|wp-postpass_" ) {
+        set $no_cache 1;
+    }
+
+    if ($request_uri ~* "/(wp-admin/|wp-login.php)"){
+        set $no_cache 1;
+    }
+        
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        include /etc/nginx/fastcgi_params;
+        fastcgi_pass unix:/var/run/php5-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_cache  microcache;
+        fastcgi_cache_bypass $no_cache;
+        fastcgi_no_cache $no_cache;
+        fastcgi_cache_valid any 90s;
+        fastcgi_max_temp_file_size 16M;
+        fastcgi_cache_use_stale updating error timeout invalid_header http_500;
+        fastcgi_cache_lock on;
+        fastcgi_cache_lock_timeout 10s;
+        add_header X-Cache $upstream_cache_status;
+    }
+
+    location ~* ^.+\.(ogg|ogv|svg|svgz|eot|otf|woff|mp4|ttf|rss|atom|jpg|jpeg|gif|png|ico|zip|tgz|gz|rar|bz2|doc|xls|exe|ppt|tar|mid|midi|wav|bmp|rtf)$ {
+        access_log off; log_not_found off; expires max;
+    }
+
+    location ~ /\. {
+        deny  all; access_log off; log_not_found off;
+    }
+
+    location = /wp-login.php {
+        limit_req zone=one burst=1 nodelay;
+        include fastcgi_params;
+        fastcgi_pass unix:/var/run/php5-fpm.sock;
+        fastcgi_index index.php;
+    }
+    
+    rewrite ^/wp-content/cache/minify.*/w3tc_rewrite_test$ /wp-content/plugins/w3-total-cache/pub/minify.php?w3tc_rewrite_test=1 last;
+    rewrite ^/wp-content/cache/minify/(.+/[X]+\.css)$ /wp-content/plugins/w3-total-cache/pub/minify.php?test_file=$1 last;
+    rewrite ^/wp-content/cache/minify/(.+\.(css|js))$ /wp-content/plugins/w3-total-cache/pub/minify.php?file=$1 last;
+
+}
+
+
